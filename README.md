@@ -4,6 +4,13 @@ The launcher is the way we communitcate to outside the game, it does a few autom
 
 ## [Getting started](https://docs.beammp.com/game/getting-started/)
 
+Follow install guide: https://docs.beammp.com/game/getting-started/#2b-linux-installation
+
+Modification: --game-dir flag
+
+--game-dir "/path/to/BeamNG.drive"
+--no-launch too if using game via proton as instructed in the install guide.
+
 ## License
 
 BeamMP Launcher, a launcher for the BeamMP mod for BeamNG.drive
