@@ -508,56 +508,151 @@ void EnableMP() {
 
 void PreGame(const beammp_fs_string& GamePath) {
     std::string GameVer = CheckVer(GamePath);
-    info("Game Version : " + GameVer);
+
+    if (!GameVer.empty()) {
+        info("Game Version : " + GameVer);
+    } else {
+        info("Game version check skipped.");
+    }
 
     CheckMP(GetGamePath() / beammp_wide("mods/multiplayer"));
     info(beammp_wide("Game user path: ") + beammp_fs_string(GetGamePath()));
 
     if (!options.no_download) {
-        std::string LatestHash = HTTP::Get("https://backend.beammp.com/sha/mod?branch=" + Branch + "&pk=" + PublicKey);
-        transform(LatestHash.begin(), LatestHash.end(), LatestHash.begin(), ::tolower);
-        LatestHash.erase(std::remove_if(LatestHash.begin(), LatestHash.end(),
-                             [](auto const& c) -> bool { return !std::isalnum(c); }),
-            LatestHash.end());
+        std::string LatestHash =
+            HTTP::Get(
+                "https://backend.beammp.com/sha/mod?branch=" +
+                Branch +
+                "&pk=" +
+                PublicKey
+            );
 
-        std::regex sha256_pattern(R"(^[a-fA-F0-9]{64}$)");
+        transform(
+            LatestHash.begin(),
+            LatestHash.end(),
+            LatestHash.begin(),
+            ::tolower
+        );
+
+        LatestHash.erase(
+            std::remove_if(
+                LatestHash.begin(),
+                LatestHash.end(),
+                [](auto const& c) -> bool {
+                    return !std::isalnum(
+                        static_cast<unsigned char>(c)
+                    );
+                }
+            ),
+            LatestHash.end()
+        );
+
+        std::regex sha256_pattern(
+            R"(^[a-fA-F0-9]{64}$)"
+        );
+
         std::smatch match;
 
-        if (LatestHash.length() != 64 || !std::regex_match(LatestHash, match, sha256_pattern)) {
-            error("Invalid hash from backend, skipping mod update check.");
-            debug("Mod hash in question: " + LatestHash);
+        if (
+            LatestHash.length() != 64 ||
+            !std::regex_match(
+                LatestHash,
+                match,
+                sha256_pattern
+            )
+        ) {
+            error(
+                "Invalid hash from backend, "
+                "skipping mod update check."
+            );
+
+            debug(
+                "Mod hash in question: " +
+                LatestHash
+            );
+
             return;
         }
 
         try {
-            if (!fs::exists(GetGamePath() / beammp_wide("mods/multiplayer"))) {
-                fs::create_directories(GetGamePath() / beammp_wide("mods/multiplayer"));
+            if (
+                !fs::exists(
+                    GetGamePath() /
+                    beammp_wide("mods/multiplayer")
+                )
+            ) {
+                fs::create_directories(
+                    GetGamePath() /
+                    beammp_wide("mods/multiplayer")
+                );
             }
+
             EnableMP();
+
         } catch (std::exception& e) {
             fatal(e.what());
         }
+
 #if defined(_WIN32)
-        std::wstring ZipPath(GetGamePath() / LR"(mods\multiplayer\BeamMP.zip)");
+
+        std::wstring ZipPath(
+            GetGamePath() /
+            LR"(mods\multiplayer\BeamMP.zip)"
+        );
+
 #elif defined(__linux__)
-        // Linux version of the game cant handle mods with uppercase names
-        std::string ZipPath(GetGamePath() / R"(mods/multiplayer/beammp.zip)");
+
+        // Linux BeamNG does not handle uppercase mod filenames correctly.
+        std::string ZipPath(
+            GetGamePath() /
+            R"(mods/multiplayer/beammp.zip)"
+        );
+
 #endif
 
-        std::string FileHash = fs::exists(ZipPath) ? Utils::GetSha256HashReallyFastFile(ZipPath) : "";
+        std::string FileHash =
+            fs::exists(ZipPath)
+                ? Utils::GetSha256HashReallyFastFile(ZipPath)
+                : "";
 
         if (FileHash != LatestHash) {
-            info("Downloading BeamMP Update " + LatestHash);
-            HTTP::Download("https://backend.beammp.com/builds/client?download=true"
-                           "&pk="
-                    + PublicKey + "&branch=" + Branch,
-                ZipPath, LatestHash);
+            info(
+                "Downloading BeamMP Update " +
+                LatestHash
+            );
+
+            if (!HTTP::Download(
+                    "https://backend.beammp.com/builds/client?download=true"
+                    "&pk=" +
+                    PublicKey +
+                    "&branch=" +
+                    Branch,
+                    ZipPath,
+                    LatestHash
+                )) {
+
+                error(
+                    "Failed to download the BeamMP client mod."
+                );
+
+                return;
+            }
         }
 
-        beammp_fs_string Target(GetGamePath() / beammp_wide("mods/unpacked/beammp"));
+        beammp_fs_string Target(
+            GetGamePath() /
+            beammp_wide("mods/unpacked/beammp")
+        );
 
-        if (fs::is_directory(Target) && !fs::is_directory(Target + beammp_wide("/.git"))) {
+        if (
+            fs::is_directory(Target) &&
+            !fs::is_directory(
+                Target +
+                beammp_wide("/.git")
+            )
+        ) {
             fs::remove_all(Target);
         }
     }
 }
+

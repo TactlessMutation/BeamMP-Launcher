@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include "Utils.h"
+
 #if defined(_WIN32)
 #include <shlobj.h>
 #elif defined(__linux__)
@@ -21,203 +22,493 @@
 #include "Options.h"
 #include "Startup.h"
 #include <Security/Init.h>
+
 #include <filesystem>
 #include <thread>
-
 #include <fstream>
 
 unsigned long GamePID = 0;
+
 #if defined(_WIN32)
+
 std::wstring QueryKey(HKEY hKey, int ID);
+
 std::filesystem::path GetGamePath() {
     static std::filesystem::path Path;
+
     if (!Path.empty())
-        return Path.wstring();
+        return Path;
 
     if (options.user_path) {
         if (std::filesystem::exists(options.user_path)) {
+
             Path = options.user_path;
-            debug(L"Using custom user folder path: " + Path.wstring());
-        } else
-            warn(L"Invalid or non-existent path (" + Utils::ToWString(options.user_path) + L") specified using --user-path, skipping");
+
+            debug(
+                L"Using custom user folder path: " +
+                Path.wstring()
+            );
+
+        } else {
+
+            warn(
+                L"Invalid or non-existent path (" +
+                Utils::ToWString(options.user_path) +
+                L") specified using --user-path, skipping"
+            );
+        }
     }
 
-    if (const auto startupIniPath = std::filesystem::path(GetGameDir()) / "startup.ini"; exists(startupIniPath)) {
+    if (
+        const auto startupIniPath =
+            std::filesystem::path(GetGameDir()) / "startup.ini";
+        exists(startupIniPath)
+    ) {
 
-        if (std::ifstream startupIni(startupIniPath); startupIni.is_open()) {
-            std::string contents((std::istreambuf_iterator(startupIni)), std::istreambuf_iterator<char>());
+        if (
+            std::ifstream startupIni(startupIniPath);
+            startupIni.is_open()
+        ) {
+
+            std::string contents(
+                (std::istreambuf_iterator<char>(startupIni)),
+                std::istreambuf_iterator<char>()
+            );
+
             startupIni.close();
 
             auto ini = Utils::ParseINI(contents);
-            if (ini.empty()) 
+
+            if (ini.empty())
                 warn("Failed to parse startup.ini");
             else
                 debug("Successfully parsed startup.ini");
 
             std::wstring userPath;
-            if (ini.contains("filesystem") && std::get<std::map<std::string, std::string>>(ini["filesystem"]).contains("UserPath"))
-                userPath = Utils::ToWString(std::get<std::map<std::string, std::string>>(ini["filesystem"])["UserPath"]);
 
-            if (userPath = Utils::ExpandEnvVars(userPath); std::filesystem::exists(userPath)) {
+            if (
+                ini.contains("filesystem") &&
+                std::get<std::map<std::string, std::string>>(
+                    ini["filesystem"]
+                ).contains("UserPath")
+            ) {
+                userPath = Utils::ToWString(
+                    std::get<std::map<std::string, std::string>>(
+                        ini["filesystem"]
+                    )["UserPath"]
+                );
+            }
+
+            userPath = Utils::ExpandEnvVars(userPath);
+
+            if (std::filesystem::exists(userPath)) {
+
                 Path = userPath;
-                debug(L"Using custom user folder path from startup.ini: " + Path.wstring());
-            } else
-                warn(L"Found custom user folder path (" + userPath + L") in startup.ini but it doesn't exist, skipping");
+
+                debug(
+                    L"Using custom user folder path from startup.ini: " +
+                    Path.wstring()
+                );
+
+            } else {
+
+                warn(
+                    L"Found custom user folder path (" +
+                    userPath +
+                    L") in startup.ini but it doesn't exist, skipping"
+                );
+            }
         }
 
         if (Path.empty()) {
-            wchar_t* appDataPath = new wchar_t[MAX_PATH];
-            HRESULT result = SHGetFolderPathW(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, appDataPath);
+
+            wchar_t* appDataPath =
+                new wchar_t[MAX_PATH];
+
+            HRESULT result =
+                SHGetFolderPathW(
+                    NULL,
+                    CSIDL_LOCAL_APPDATA,
+                    NULL,
+                    0,
+                    appDataPath
+                );
 
             if (!SUCCEEDED(result)) {
                 fatal("Cannot get Local Appdata directory");
             }
 
-            auto BeamNGAppdataPath = std::filesystem::path(appDataPath) / "BeamNG";
+            auto BeamNGAppdataPath =
+                std::filesystem::path(appDataPath) /
+                "BeamNG";
 
-            if (const auto beamngIniPath = BeamNGAppdataPath / "BeamNG.Drive.ini"; exists(beamngIniPath)) {
-                if (std::ifstream beamngIni(beamngIniPath); beamngIni.is_open()) {
-                    std::string contents((std::istreambuf_iterator(beamngIni)), std::istreambuf_iterator<char>());
+            if (
+                const auto beamngIniPath =
+                    BeamNGAppdataPath /
+                    "BeamNG.Drive.ini";
+                exists(beamngIniPath)
+            ) {
+
+                if (
+                    std::ifstream beamngIni(beamngIniPath);
+                    beamngIni.is_open()
+                ) {
+
+                    std::string contents(
+                        (std::istreambuf_iterator<char>(beamngIni)),
+                        std::istreambuf_iterator<char>()
+                    );
+
                     beamngIni.close();
 
-                    auto ini = Utils::ParseINI(contents);
+                    auto ini =
+                        Utils::ParseINI(contents);
+
                     if (ini.empty())
                         warn("Failed to parse BeamNG.Drive.ini");
                     else
-                        debug("Successfully parsed BeamNG.Drive.ini");
+                        debug(
+                            "Successfully parsed BeamNG.Drive.ini"
+                        );
 
                     std::wstring userPath;
 
                     if (ini.contains("userFolder")) {
-                        userPath = Utils::ToWString(std::get<std::string>(ini["userFolder"]));
-                        userPath.erase(0, userPath.find_first_not_of(L" \t"));
 
+                        userPath =
+                            Utils::ToWString(
+                                std::get<std::string>(
+                                    ini["userFolder"]
+                                )
+                            );
+
+                        userPath.erase(
+                            0,
+                            userPath.find_first_not_of(L" \t")
+                        );
                     }
 
-                    if (userPath = std::filesystem::path(Utils::ExpandEnvVars(userPath)); std::filesystem::exists(userPath)) {
+                    userPath =
+                        Utils::ExpandEnvVars(userPath);
+
+                    if (
+                        std::filesystem::exists(userPath)
+                    ) {
+
                         Path = userPath;
-                        debug(L"Using custom user folder path from BeamNG.Drive.ini: " + Path.wstring());
-                    } else
-                        warn(L"Found custom user folder path (" + userPath + L") in BeamNG.Drive.ini but it doesn't exist, skipping");
+
+                        debug(
+                            L"Using custom user folder path from "
+                            L"BeamNG.Drive.ini: " +
+                            Path.wstring()
+                        );
+
+                    } else {
+
+                        warn(
+                            L"Found custom user folder path (" +
+                            userPath +
+                            L") in BeamNG.Drive.ini but it doesn't "
+                            L"exist, skipping"
+                        );
+                    }
                 }
             }
 
             if (Path.empty()) {
-                Path = BeamNGAppdataPath / "BeamNG.drive";
+                Path =
+                    BeamNGAppdataPath /
+                    "BeamNG.drive";
             }
 
             delete[] appDataPath;
         }
     }
 
-    std::string Ver = CheckVer(GetGameDir());
-    Ver = Ver.substr(0, Ver.find('.', Ver.find('.') + 1));
+    /*
+     * The previous implementation called CheckVer() here.
+     *
+     * That check was unnecessary because the version isn't used to
+     * construct the resulting path. More importantly, it meant a
+     * custom installation without integrity.json could fail before
+     * the game was launched.
+     */
     Path /= Utils::ToWString("current");
-    return Path;
-}
-#elif defined(__linux__)
-std::filesystem::path GetGamePath() {
-    // Right now only steam is supported
-    struct passwd* pw = getpwuid(getuid());
-    std::string homeDir = pw->pw_dir;
 
-    std::string Path = homeDir + "/.local/share/BeamNG/BeamNG.drive/";
-    std::string Ver = CheckVer(GetGameDir());
-    Ver = Ver.substr(0, Ver.find('.', Ver.find('.') + 1));
-    Path += "current/";
     return Path;
 }
+
+#elif defined(__linux__)
+
+std::filesystem::path GetGamePath() {
+
+    struct passwd* pw =
+        getpwuid(getuid());
+
+    std::string homeDir =
+        pw->pw_dir;
+
+    std::filesystem::path Path =
+        homeDir +
+        "/.local/share/BeamNG/BeamNG.drive/";
+
+    /*
+     * Do not call CheckVer() here.
+     *
+     * The game version isn't needed to construct the user path and
+     * custom installations are allowed to omit integrity.json.
+     */
+    Path += "current/";
+
+    return Path;
+}
+
 #endif
 
 #if defined(_WIN32)
+
 void StartGame(std::wstring Dir) {
+
     BOOL bSuccess = FALSE;
+
     PROCESS_INFORMATION pi;
+
     STARTUPINFOW si = { 0 };
     si.cb = sizeof(si);
-    std::wstring BaseDir = Dir; //+"\\Bin64";
-    // Dir += R"(\Bin64\BeamNG.drive.x64.exe)";
+
+    std::wstring BaseDir = Dir;
+
     Dir += L"\\BeamNG.drive.exe";
+
     std::wstring gameArgs = L"";
 
-    for (int i = 0; i < options.game_arguments_length; i++) {
+    for (
+        int i = 0;
+        i < options.game_arguments_length;
+        i++
+    ) {
         gameArgs += L" ";
-        gameArgs += Utils::ToWString(options.game_arguments[i]);
+        gameArgs +=
+            Utils::ToWString(
+                options.game_arguments[i]
+            );
     }
 
-    debug(L"BeamNG executable path: " + Dir);
+    debug(
+        L"BeamNG executable path: " +
+        Dir
+    );
 
-    bSuccess = CreateProcessW(nullptr, (wchar_t*)(Dir + gameArgs).c_str(), nullptr, nullptr, TRUE, 0, nullptr, BaseDir.c_str(), &si, &pi);
+    bSuccess =
+        CreateProcessW(
+            nullptr,
+            (wchar_t*)(Dir + gameArgs).c_str(),
+            nullptr,
+            nullptr,
+            TRUE,
+            0,
+            nullptr,
+            BaseDir.c_str(),
+            &si,
+            &pi
+        );
+
     if (bSuccess) {
+
         info("Game Launched!");
+
         GamePID = pi.dwProcessId;
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        error("Game Closed! launcher closing soon");
+
+        WaitForSingleObject(
+            pi.hProcess,
+            INFINITE
+        );
+
+        error(
+            "Game Closed! launcher closing soon"
+        );
+
     } else {
+
         std::string err = "";
 
         DWORD dw = GetLastError();
+
         LPVOID lpErrorMsgBuffer;
 
-        if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dw,
-                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpErrorMsgBuffer, 0, nullptr)
-            == 0) {
-            err = "Unknown error code: " + std::to_string(dw);
+        if (
+            FormatMessage(
+                FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                FORMAT_MESSAGE_FROM_SYSTEM |
+                FORMAT_MESSAGE_IGNORE_INSERTS,
+                NULL,
+                dw,
+                MAKELANGID(
+                    LANG_NEUTRAL,
+                    SUBLANG_DEFAULT
+                ),
+                (LPTSTR)&lpErrorMsgBuffer,
+                0,
+                nullptr
+            ) == 0
+        ) {
+
+            err =
+                "Unknown error code: " +
+                std::to_string(dw);
+
         } else {
-            err = "Error " + std::to_string(dw) + ": " + (char*)lpErrorMsgBuffer;
+
+            err =
+                "Error " +
+                std::to_string(dw) +
+                ": " +
+                (char*)lpErrorMsgBuffer;
         }
 
-        error("Failed to Launch the game! launcher closing soon. " + err);
+        error(
+            "Failed to Launch the game! "
+            "launcher closing soon. " +
+            err
+        );
     }
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+
+    std::this_thread::sleep_for(
+        std::chrono::seconds(5)
+    );
+
     exit(2);
 }
+
 #elif defined(__linux__)
+
 void StartGame(std::string Dir) {
-    std::string filename = (Dir + "/BinLinux/BeamNG.drive.x64");
+
+    std::string filename =
+        Dir +
+        "/BinLinux/BeamNG.drive.x64";
+
     std::vector<const char*> argv;
-    argv.push_back(filename.data());
-    for (int i = 0; i < options.game_arguments_length; i++) {
-        argv.push_back(options.game_arguments[i]);
+
+    argv.push_back(
+        filename.data()
+    );
+
+    for (
+        int i = 0;
+        i < options.game_arguments_length;
+        i++
+    ) {
+        argv.push_back(
+            options.game_arguments[i]
+        );
     }
 
     argv.push_back(nullptr);
+
     pid_t pid;
 
     posix_spawn_file_actions_t file_actions;
-    auto status = posix_spawn_file_actions_init(&file_actions);
-    // disable stdout
+
+    auto status =
+        posix_spawn_file_actions_init(
+            &file_actions
+        );
+
     if (status != 0) {
-        error(std::string("posix_spawn_file_actions_init failed: ") + std::strerror(errno));
-    }
-    status = posix_spawn_file_actions_addclose(&file_actions, STDOUT_FILENO);
-    if (status != 0) {
-        error(std::string("posix_spawn_file_actions_addclose for STDOUT failed: ") + std::strerror(errno));
-    }
-    status = posix_spawn_file_actions_addclose(&file_actions, STDERR_FILENO);
-    if (status != 0) {
-        error(std::string("posix_spawn_file_actions_addclose for STDERR failed: ") + std::strerror(errno));
+        error(
+            std::string(
+                "posix_spawn_file_actions_init failed: "
+            ) +
+            std::strerror(errno)
+        );
     }
 
-    // launch the game
-    int result = posix_spawn(&pid, filename.c_str(), &file_actions, NULL, const_cast<char**>(argv.data()), environ);
+    status =
+        posix_spawn_file_actions_addclose(
+            &file_actions,
+            STDOUT_FILENO
+        );
+
+    if (status != 0) {
+        error(
+            std::string(
+                "posix_spawn_file_actions_addclose "
+                "for STDOUT failed: "
+            ) +
+            std::strerror(errno)
+        );
+    }
+
+    status =
+        posix_spawn_file_actions_addclose(
+            &file_actions,
+            STDERR_FILENO
+        );
+
+    if (status != 0) {
+        error(
+            std::string(
+                "posix_spawn_file_actions_addclose "
+                "for STDERR failed: "
+            ) +
+            std::strerror(errno)
+        );
+    }
+
+    int result =
+        posix_spawn(
+            &pid,
+            filename.c_str(),
+            &file_actions,
+            NULL,
+            const_cast<char**>(
+                argv.data()
+            ),
+            environ
+        );
 
     if (result != 0) {
-        error("Failed to Launch the game! launcher closing soon");
+
+        error(
+            "Failed to Launch the game! "
+            "launcher closing soon"
+        );
+
         return;
+
     } else {
-        waitpid(pid, &status, 0);
-        error("Game Closed! launcher closing soon");
+
+        waitpid(
+            pid,
+            &status,
+            0
+        );
+
+        error(
+            "Game Closed! launcher closing soon"
+        );
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(
+        std::chrono::seconds(5)
+    );
+
     exit(2);
 }
+
 #endif
 
-void InitGame(const beammp_fs_string& Dir) {
+void InitGame(
+    const beammp_fs_string& Dir
+) {
     if (!options.no_launch) {
-        std::thread Game(StartGame, Dir);
+
+        std::thread Game(
+            StartGame,
+            Dir
+        );
+
         Game.detach();
     }
 }
